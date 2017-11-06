@@ -1,0 +1,104 @@
+---
+title: "Practical Machine Learning - Prediction Assignment Writeup"
+author: "Ashish Veera"
+date: "11/5/2017"
+output: html_document
+---
+
+#### Executive Summary
+The objective and goal of this project is to predict the manner in which certain participants performed their exercise and machine learning classification of accelerometers data on the belt, forearm, arm, and dumbell of 6 participants.In training data “classe” is the outcome variable and uses certaing predictor variables inorder to predict 20 different test cases.The data for this project are retrieved from the below source: http://groupware.les.inf.puc-rio.br/har.
+
+The “classe” variable classifies the correct and incorrect outcomes of A, B, C, D, and E categories. Coursera project writeup describes the model cross validation and expected out of sample error rate.Random Forest Model has been applied successfully to predict all 20 different test cases.
+
+#### Loading the data
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r Loading, warning=FALSE}
+setwd("~/Desktop/PracticalMachineLearning")
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists("./data/pml-training.csv")) {
+  url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url.training, destfile = "./data/pml-training.csv")
+}
+
+if (!file.exists("./data/pml-testing.csv")) {
+  url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url.testing, destfile = "./data/pml-testing.csv")
+}
+```
+
+#### Reading and Processing data
+```{r reading, warning=FALSE}
+train<- read.csv("./data/pml-training.csv")
+test<- read.csv("./data/pml-testing.csv")
+
+dim(train)
+dim(test)
+```
+
+Note that both dataset are having the same variables (160 variables). Next step is to try remove the near zero variance variables or columns that contain N/A missing values.
+
+```{r preprocessing, warning = FALSE}
+train <- train[, colSums(is.na(train)) == 0] 
+test <- test[, colSums(is.na(test)) == 0] 
+classe <- train$classe
+trainR <- grepl("^X|timestamp|window", names(train))
+train <- train[, !trainR]
+trainM <- train[, sapply(train, is.numeric)]
+trainM$classe <- classe
+testR <- grepl("^X|timestamp|window", names(test))
+test<- test[, !testR]
+testM <- test[, sapply(test, is.numeric)]  
+```
+
+There were 107 variables with more than 95% of the data values missing. Those variables were removed from the data. 
+
+#### Data Partitioning
+
+Partitioning Training data set into two data sets,70% for train data, 30% for test data as this will be used for cross validation purpose:
+
+```{r Partitioning, warning=FALSE}
+library(caret)
+set.seed(12345) 
+inTrain <- createDataPartition(trainM$classe, p=0.70, list=F)
+train_data <- trainM[inTrain, ]
+test_data <- trainM[-inTrain, ]
+```
+
+#### Data Prediction and Modelling
+Algorithm which will be used for the predictive model here is Random Forest
+
+```{r Modelling, warning=FALSE}
+setting <- trainControl(method="cv", 5)
+RandomForest <- train(classe ~ ., data=train_data, method="rf", trControl=setting, ntree=250)
+RandomForest
+```
+We estimate the performance of the model built. Getting the accuracy as well as the estimated out-of-sample error.
+```{r, warning=FALSE}
+    predict_RandomForest <- predict(RandomForest, test_data)
+    confusionMatrix(test_data$classe, predict_RandomForest)
+```
+
+```{r, warning= FALSE}
+accuracy <- postResample(predict_RandomForest, test_data$classe)
+error<-1 - as.numeric(confusionMatrix(test_data$classe, predict_RandomForest)$overall[1])
+accuracy*100
+error*100
+```
+The accuracy of the model is 99.03% and the out-of-sample error is 0.9%
+
+#### Predicting Results on the Test Data
+Finally, will use the Random Forest model to predicy the results on the actual test data. 
+```{r, warning= FALSE}
+predictionRF<- predict(RandomForest, testM)
+predictionRF
+```
